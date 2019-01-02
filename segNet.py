@@ -241,7 +241,7 @@ def train_model(x=[],y=[]):
 
         
         #'sparse_categorical_crossentropy'
-        model.compile(optimizer = optimizer,loss = 'sparse_categorical_crossentropy',metrics=['accuracy'])
+        model.compile(optimizer = optimizer,loss = 'categorical_crossentropy',metrics=['accuracy'])
         
        
         
