@@ -233,8 +233,8 @@ def train_model(x=[],y=[]):
         
         
         
-        #model_poistion=multi_gpu_model(model_poistion,gpus=2)
-        #model_yaw=multi_gpu_model(model_yaw,gpus=2)
+        #model_gpu=multi_gpu_model(model,gpus=2)
+        
         
         optimizer=Adam(lr=0.001)
 
