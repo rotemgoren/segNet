@@ -205,6 +205,7 @@ def prepar_data(batch_file):
         y=[]
         count=0
         i=0
+
         for image in glob.glob(PATH):
             im=cv2.imread(image)
             
