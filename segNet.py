@@ -14,7 +14,7 @@ from keras.utils import multi_gpu_model
 from queue import Queue
 from keras.models import Model,Sequential
 from keras.optimizers import Adam
-from keras.layers import Input,Dense, Conv2D, MaxPooling2D,Flatten,ZeroPadding2D, Reshape, Permute, Activation,UpSampling2D,Dropout
+from keras.layers import Input,Dense, Conv2D, MaxPooling2D,Flatten,ZeroPadding2D, Reshape, Permute, Activation,UpSampling2D,Dropout,Concatenate
 from keras.layers.normalization import BatchNormalization
 from collections import OrderedDict
 from keras.utils.np_utils import to_categorical
@@ -32,37 +32,39 @@ def VGGSegnet( n_classes ,  input_height=416, input_width=608 ):
     
     img_input = Input(shape=(3,input_height,input_width))
     
-    x = Conv2D(64, (3, 3), activation='relu', padding='same', name='block1_conv1', data_format='channels_first' )(img_input)
-    
-    x = Conv2D(64, (3, 3), activation='relu', padding='same', name='block1_conv2', data_format='channels_first' )(x)
+    conv1 = Conv2D(64, (3, 3), activation='relu', padding='same', name='block1_conv1', data_format='channels_first' )(img_input)
+    conv1 = Conv2D(64, (3, 3), activation='relu', padding='same', name='block1_conv2', data_format='channels_first' )(conv1)
 
-    x = MaxPooling2D((2, 2), strides=(2, 2), name='block1_pool', data_format='channels_first' )(x)
-    f1 = x
+    pool1 = MaxPooling2D((2, 2), strides=(2, 2), name='block1_pool', data_format='channels_first' )(conv1)
+    f1 = pool1
     # Block 2
-    x = Conv2D(128, (3, 3), activation='relu', padding='same', name='block2_conv1', data_format='channels_first' )(x)
-    x = Conv2D(128, (3, 3), activation='relu', padding='same', name='block2_conv2', data_format='channels_first' )(x)
-    x = MaxPooling2D((2, 2), strides=(2, 2), name='block2_pool', data_format='channels_first' )(x)
-    f2 = x
+    conv2 = Conv2D(128, (3, 3), activation='relu', padding='same', name='block2_conv1', data_format='channels_first' )(pool1)
+    conv2 = Conv2D(128, (3, 3), activation='relu', padding='same', name='block2_conv2', data_format='channels_first' )(conv2)
+    pool2 = MaxPooling2D((2, 2), strides=(2, 2), name='block2_pool', data_format='channels_first' )(conv2)
+    f2 = pool2
     # Block 3
-    x = Conv2D(256, (3, 3), activation='relu', padding='same', name='block3_conv1', data_format='channels_first' )(x)
-    x = Conv2D(256, (3, 3), activation='relu', padding='same', name='block3_conv2', data_format='channels_first' )(x)
-    x = Conv2D(256, (3, 3), activation='relu', padding='same', name='block3_conv3', data_format='channels_first' )(x)
-    x = MaxPooling2D((2, 2), strides=(2, 2), name='block3_pool', data_format='channels_first' )(x)
-    f3 = x
+    conv3 = Conv2D(256, (3, 3), activation='relu', padding='same', name='block3_conv1', data_format='channels_first' )(pool2)
+    conv3 = Conv2D(256, (3, 3), activation='relu', padding='same', name='block3_conv2', data_format='channels_first' )(conv3)
+    conv3 = Conv2D(256, (3, 3), activation='relu', padding='same', name='block3_conv3', data_format='channels_first' )(conv3)
+
+    pool3 = MaxPooling2D((2, 2), strides=(2, 2), name='block3_pool', data_format='channels_first' )(conv3)
+    f3 = pool3
     # Block 4
-    x = Conv2D(512, (3, 3), activation='relu', padding='same', name='block4_conv1', data_format='channels_first' )(x)
-    x = Conv2D(512, (3, 3), activation='relu', padding='same', name='block4_conv2', data_format='channels_first' )(x)
-    x = Conv2D(512, (3, 3), activation='relu', padding='same', name='block4_conv3', data_format='channels_first' )(x)
-    x = MaxPooling2D((2, 2), strides=(2, 2), name='block4_pool', data_format='channels_first' )(x)
-    f4 = x
+    conv4 = Conv2D(512, (3, 3), activation='relu', padding='same', name='block4_conv1', data_format='channels_first' )(pool3)
+    conv4 = Conv2D(512, (3, 3), activation='relu', padding='same', name='block4_conv2', data_format='channels_first' )(conv4)
+    conv4 = Conv2D(512, (3, 3), activation='relu', padding='same', name='block4_conv3', data_format='channels_first' )(conv4)
+    drop4 = Dropout(0.5)(conv4)
+    pool4 = MaxPooling2D((2, 2), strides=(2, 2), name='block4_pool', data_format='channels_first' )(drop4)
+    f4 = pool4
     # Block 5
-    x = Conv2D(512, (3, 3), activation='relu', padding='same', name='block5_conv1', data_format='channels_first' )(x)
-    x = Conv2D(512, (3, 3), activation='relu', padding='same', name='block5_conv2', data_format='channels_first' )(x)
-    x = Conv2D(512, (3, 3), activation='relu', padding='same', name='block5_conv3', data_format='channels_first' )(x)
-    x = MaxPooling2D((2, 2), strides=(2, 2), name='block5_pool', data_format='channels_first' )(x)
-    f5 = x
+    conv5 = Conv2D(512, (3, 3), activation='relu', padding='same', name='block5_conv1', data_format='channels_first' )(pool4)
+    conv5 = Conv2D(512, (3, 3), activation='relu', padding='same', name='block5_conv2', data_format='channels_first' )(conv5)
+    conv5 = Conv2D(512, (3, 3), activation='relu', padding='same', name='block5_conv3', data_format='channels_first' )(conv5)
+    drop5=Dropout(0.5)(conv5)
+    pool5 = MaxPooling2D((2, 2), strides=(2, 2), name='block5_pool', data_format='channels_first' )(drop5)
+    f5 = pool5
     
-    x = Flatten(name='flatten')(x)
+    x = Flatten(name='flatten')(pool5)
     x = Dense(4096, activation='relu', name='fc1')(x)
     x = Dense(4096, activation='relu', name='fc2')(x)
     x = Dense( 1000 , activation='softmax', name='predictions')(x)
@@ -76,42 +78,54 @@ def VGGSegnet( n_classes ,  input_height=416, input_width=608 ):
     o = levels[4]
     	
     #o = ( ZeroPadding2D( (1,1) , data_format='channels_first' ))(o)
-    o = ( Conv2D(512, (3, 3), padding='same', data_format='channels_first'))(o)
-    o = ( BatchNormalization())(o)
-    
-    o = ( UpSampling2D( (2,2), data_format='channels_first'))(o)
+    conv6 = ( Conv2D(512, (3, 3), padding='same', data_format='channels_first'))(o)
+    bn6 = ( BatchNormalization())(conv6)
+    drop6 = Dropout(0.5)(bn6)
+
+    up7 = ( UpSampling2D( (2,2), data_format='channels_first'))(drop6)
+    merge7 = Concatenate([drop5, up7], axis=3)
     #o = ( ZeroPadding2D( (1,1), data_format='channels_first'))(o)
-    o = ( Conv2D( 256, (3, 3), padding='same', data_format='channels_first'))(o)
-    o = ( BatchNormalization())(o)
-    
-    o = ( UpSampling2D((2,2)  , data_format='channels_first' ) )(o)
+    conv7 = ( Conv2D( 256, (3, 3), padding='same', data_format='channels_first'))(merge7)
+    bn7 = ( BatchNormalization())(conv7)
+    drop7 = Dropout(0.5)(bn7)
+
+    up8 = ( UpSampling2D((2,2) , data_format='channels_first' ) )(drop7)
+    merge8 = Concatenate([drop4, up8], axis=3)
     #o = ( ZeroPadding2D((1,1) , data_format='channels_first' ))(o)
-    o = ( Conv2D( 128 , (3, 3), padding='same' , data_format='channels_first' ))(o)
-    o = ( BatchNormalization())(o)
-    
-    o = ( UpSampling2D((2,2)  , data_format='channels_first' ))(o)
+    conv8 = ( Conv2D( 128 , (3, 3), padding='same' , data_format='channels_first' ))(merge8)
+    bn8 = ( BatchNormalization())(conv8)
+    drop8 = Dropout(0.5)(bn8)
+
+    up9 = ( UpSampling2D((2,2) , data_format='channels_first' ))(drop8)
     #o = ( ZeroPadding2D((1,1)  , data_format='channels_first' ))(o)
-    o = ( Conv2D( 64 , (3, 3), padding='same'  , data_format='channels_first' ))(o)
-    o = ( BatchNormalization())(o)
-    
-    o = ( UpSampling2D((2,2)  , data_format='channels_first' ))(o)
+    merge9 = Concatenate([conv3, up9], axis=3)
+    conv9 = ( Conv2D( 64 , (3, 3), padding='same'  , data_format='channels_first' ))(merge9)
+    bn9 = ( BatchNormalization())(conv9)
+    drop9 = Dropout(0.5)(bn9)
+
+    up10 = ( UpSampling2D((2,2) , data_format='channels_first' ))(drop9)
     #o = ( ZeroPadding2D((1,1)  , data_format='channels_first' ))(o)
-    o = ( Conv2D( 64 , (3, 3), padding='same'  , data_format='channels_first' ))(o)
-    o = ( BatchNormalization())(o)
-    
-    o = ( UpSampling2D((2,2)  , data_format='channels_first' ))(o)
+    merge10 = Concatenate([conv2, up10], axis=3)
+    conv10 = ( Conv2D( 64 , (3, 3), padding='same'  , data_format='channels_first' ))(merge10)
+    bn10 = ( BatchNormalization())(conv10)
+    drop10 = Dropout(0.5)(bn10)
+
+    up11 = ( UpSampling2D((2,2) , data_format='channels_first' ))(drop10)
+    merge11 = Concatenate([conv2, up11], axis=3)
     #o = ( ZeroPadding2D((1,1)  , data_format='channels_first' ))(o)
-    o = ( Conv2D( 64 , (3, 3), padding='same'  , data_format='channels_first' ))(o)
-    o = ( BatchNormalization())(o)
-    o =  Conv2D( n_classes , (3, 3) , padding='same', data_format='channels_first' )( o )
+    conv11 = ( Conv2D( 64 , (3, 3), padding='same'  , data_format='channels_first' ))(merge11)
+    bn11 = ( BatchNormalization())(conv11)
+    drop11 = Dropout(0.5)(bn11)
+
+    output =  Conv2D( n_classes , (3, 3) , padding='same', data_format='channels_first' )(drop11)
     
  
    
-    o_shape = Model(img_input , o ).output_shape
+    o_shape = Model(img_input , output ).output_shape
     outputHeight = o_shape[2]
     outputWidth = o_shape[3]
     #o=(Flatten())(o)
-    o = (Reshape((  -1  , outputHeight*outputWidth   )))(o)
+    o = (Reshape((  -1  , outputHeight*outputWidth   )))(output)
     o = (Permute((2, 1)))(o)
     o = (Activation('softmax'))(o)
     #o=(Dense(outputHeight*outputWidth,activation='softmax'))(o)
