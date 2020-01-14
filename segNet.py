@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 from threading import Thread
 from keras.utils import multi_gpu_model
 from queue import Queue
-import keras
+
 from keras.models import Model,Sequential
 from keras.optimizers import Adam
 from keras.layers import Input,Dense, Conv2D, MaxPooling2D,Flatten,ZeroPadding2D, Reshape, Permute, Activation,UpSampling2D,Dropout,concatenate
@@ -70,59 +70,59 @@ def VGGSegnet( n_classes ,  input_height=416, input_width=608 ):
         vgg.load_weights(VGG_Weights_path)
 
 
-    conv6 =  Conv2D(512, (3, 3), padding='same', name='block6_conv1')(pool5)
+    conv6 =  Conv2D(512, (3, 3), activation='relu', padding='same', name='block6_conv1')(pool5)
     bn6 =  BatchNormalization()(conv6)
     drop6 = Dropout(0.5)(bn6)
 
     up7 = UpSampling2D( (2,2), name='block7_up1')(drop6)
     merge7 = concatenate([conv5, up7],name='block7_merge')
     #o = ( ZeroPadding2D( (1,1), data_format='channels_first'))(o)
-    conv7 = Conv2D( 256, (3, 3), padding='same', name='block7_conv1')(merge7)
+    conv7 = Conv2D( 256, (3, 3), activation='relu',padding='same', name='block7_conv1')(merge7)
     bn7 = BatchNormalization()(conv7)
     drop7 = Dropout(0.5)(bn7)
 
     up8 =  UpSampling2D((2,2) , name='block8_up1') (drop7)
     merge8 = concatenate([conv4, up8],name='block8_merge')
     #o = ( ZeroPadding2D((1,1) , data_format='channels_first' ))(o)
-    conv8 = Conv2D( 128 , (3, 3), padding='same' ,name='block8_conv' )(merge8)
+    conv8 = Conv2D( 128 , (3, 3), activation='relu', padding='same' ,name='block8_conv' )(merge8)
     bn8 =  BatchNormalization()(conv8)
     drop8 = Dropout(0.5)(bn8)
 
     up9 =  UpSampling2D((2,2) , name='block9_up1')(drop8)
     #o = ( ZeroPadding2D((1,1)  , data_format='channels_first' ))(o)
     merge9 = concatenate([conv3, up9],name='block9_merge')
-    conv9 =  Conv2D( 64 , (3, 3), padding='same', name='block9_conv')(merge9)
+    conv9 =  Conv2D( 64 , (3, 3), activation='relu',padding='same', name='block9_conv')(merge9)
     bn9 = BatchNormalization()(conv9)
     drop9 = Dropout(0.5)(bn9)
 
     up10 = UpSampling2D((2,2),name='block10_up1')(drop9)
     #o = ( ZeroPadding2D((1,1)  , data_format='channels_first' ))(o)
     merge10 = concatenate([conv2, up10],name='block10_merge')
-    conv10 =  Conv2D( 64 , (3, 3), padding='same',name='block10_conv')(merge10)
+    conv10 =  Conv2D( 64 , (3, 3), activation='relu',padding='same',name='block10_conv')(merge10)
     bn10 =  BatchNormalization()(conv10)
     drop10 = Dropout(0.5)(bn10)
 
     up11 = UpSampling2D((2,2) ,name='block11_up1')(drop10)
     merge11 = concatenate([conv1, up11],name='block11_merge')
     #o = ( ZeroPadding2D((1,1)  , data_format='channels_first' ))(o)
-    conv11 = Conv2D( 64 , (3, 3), padding='same',name='block11_conv')(merge11)
+    conv11 = Conv2D( 64 , (3, 3), activation='relu',padding='same',name='block11_conv')(merge11)
     bn11 =  BatchNormalization()(conv11)
     drop11 = Dropout(0.5)(bn11)
 
-    output =  Conv2D( n_classes , (3, 3) , padding='same',name='block12_conv')(drop11)
+    output =  Conv2D( n_classes , (3, 3) , activation='softmax', padding='same',name='block12_conv')(drop11)
     
  
    
-    o_shape = Model(img_input , output ).output_shape
-    outputHeight = o_shape[1]
-    outputWidth = o_shape[2]
-    #o=(Flatten())(o)
-    o = (Reshape((  -1  , outputHeight*outputWidth   )))(output)
-    o = (Permute((2, 1)))(o)
-    o = (Activation('softmax'))(o)
-    #o=(Dense(outputHeight*outputWidth,activation='softmax'))(o)
-   
-    model = Model( img_input , o )
+    # o_shape = Model(img_input , output ).output_shape
+    # outputHeight = o_shape[1]
+    # outputWidth = o_shape[2]
+    # #o=(Flatten())(o)
+    # o = (Reshape((  -1  , outputHeight*outputWidth   )))(output)
+    # o = (Permute((2, 1)))(o)
+    # o = (Activation('softmax'))(o)
+    # #o=(Dense(outputHeight*outputWidth,activation='softmax'))(o)
+    #
+    model = Model( img_input , output)
     #model.outputWidth = outputWidth
     #model.outputHeight = outputHeight
     
@@ -209,7 +209,7 @@ def prepar_data(batch_file):
             #labeled=one_hot_it(labeled)
             labeled = to_categorical(labeled, num_classes=32)
             #labeled=labeled.flatten()
-            labeled=labeled.reshape(labeled.shape[0]*labeled.shape[1],-1)
+            #labeled=labeled.reshape(labeled.shape[0]*labeled.shape[1],-1)
             
             y.append(np.array(labeled,dtype=np.uint8))
             #count+=1
@@ -270,7 +270,7 @@ def train_model(x_train=[],y_train=[],x_valid=[],y_valid=[]):
         
      
                 
-        model_gpu.fit(x_train,y_train,epochs=100,shuffle=False,batch_size=32,validation_data=(x_valid,y_valid),callbacks=[])
+        model_gpu.fit(x_train,y_train,epochs=100,shuffle=True,batch_size=32,validation_data=(x_valid,y_valid),callbacks=[])
             
 
 
@@ -286,9 +286,9 @@ def test_model(x_test):
         model.load_weights(weights_file_name)
     
     x_test1=np.expand_dims(x_test[50], axis=0)
-    x_predict=model.predict(x_test1,batch_size=1)
+    x_predict=model.predict(x_test1,batch_size=1)[0,:,:,:]
 
-    x_predict=np.reshape(x_predict[0],(WIDTH,HIGHT,32))
+    #x_predict=np.reshape(x_predict[0],(WIDTH,HIGHT,32))
 
     x_predict=np.argmax(x_predict,axis=2)
     x_predict=label_to_color(x_predict)
@@ -317,40 +317,40 @@ if __name__=='__main__':
     # vgg.save_weights('vgg16_weights.h5')
     # tbCallBack = keras.callbacks.TensorBoard(log_dir='/Graph', histogram_freq=100,
     #                                          write_graph=True, write_images=True)
+
+    #for _ in range(5):
     x,y=prepar_data(0)
 
     val_ratio = 0.7
     test_ratio = 0.1
 
     x_test = x[len(x)-int(len(x)*test_ratio):, :, :, :]
-    y_test = y[len(y)-int(len(y)*test_ratio):, :, :]
+    y_test = y[len(y)-int(len(y)*test_ratio):, :, :, :]
 
+# for _ in range(5):
     x=x[:len(x)-int(len(x)*test_ratio), :, :, :]
-    y=y[:len(y)-int(len(y)*test_ratio), :, :]
+    y=y[:len(y)-int(len(y)*test_ratio), :, : ,:]
 
     perm = np.random.permutation(x.shape[0])
     x = x[perm, :, :, :]
-    y = y[perm, :, :]
+    y = y[perm, :, :, :]
 
     x_train = x[:int(len(x) * val_ratio), :, :, :]
-    y_train = y[:int(len(y) * val_ratio), :, :]
+    y_train = y[:int(len(y) * val_ratio), :, :, :]
 
     x_valid = x[int(len(x) * val_ratio):, :, :, :]
-    y_valid = y[int(len(y) * val_ratio):, :, :]
-
-
+    y_valid = y[int(len(y) * val_ratio):, :, :, :]
 
     del x
     del y
+
     x_train = np.array(x_train, dtype=np.float32)
     y_train = np.array(y_train, dtype=np.float32)
 
     x_valid = np.array(x_valid, dtype=np.float32)
     y_valid = np.array(y_valid, dtype=np.float32)
 
-    for _ in range(5):
-    
-            train_model(x_train,y_train,x_valid,y_valid)
+    #train_model(x_train,y_train,x_valid,y_valid)
 
     
     x_predict=test_model(x_test)
@@ -358,12 +358,12 @@ if __name__=='__main__':
     
     plt.figure()
     plt.imshow(x_predict)
-    plt.figure()
-    y=y_train[50,:,:]
-    y=np.reshape(y,(WIDTH,HIGHT,32))
-    
-    y=np.argmax(y,axis=2)
-    y=label_to_color(y)
-    plt.imshow(y)
-    
+    #plt.figure()
+    # y=y_test[50,:,:]
+    # #y=np.reshape(y,(WIDTH,HIGHT,32))
+    #
+    # y=np.argmax(y,axis=2)
+    # y=label_to_color(y)
+    # plt.imshow(y)
+    #
     #prepar_data()    
