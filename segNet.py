@@ -12,112 +12,104 @@ import matplotlib.pyplot as plt
 from threading import Thread
 from keras.utils import multi_gpu_model
 from queue import Queue
+import keras
 from keras.models import Model,Sequential
 from keras.optimizers import Adam
-from keras.layers import Input,Dense, Conv2D, MaxPooling2D,Flatten,ZeroPadding2D, Reshape, Permute, Activation,UpSampling2D,Dropout,Concatenate
+from keras.layers import Input,Dense, Conv2D, MaxPooling2D,Flatten,ZeroPadding2D, Reshape, Permute, Activation,UpSampling2D,Dropout,concatenate
 from keras.layers.normalization import BatchNormalization
 from collections import OrderedDict
 from keras.utils.np_utils import to_categorical
 from keras import backend as K
 
+from keras.applications.vgg16 import VGG16
+
 import os
-file_path = os.path.dirname( os.path.abspath(__file__) )
-VGG_Weights_path = file_path+"vgg16_weights.h5"
-weights_file_name="weights_VGGsegnet.h5"
-WIDTH=480
-HIGHT=672
+
 
 def VGGSegnet( n_classes ,  input_height=416, input_width=608 ):
     #model = Sequential()
     
-    img_input = Input(shape=(3,input_height,input_width))
-    
-    conv1 = Conv2D(64, (3, 3), activation='relu', padding='same', name='block1_conv1', data_format='channels_first' )(img_input)
-    conv1 = Conv2D(64, (3, 3), activation='relu', padding='same', name='block1_conv2', data_format='channels_first' )(conv1)
+    img_input = Input(shape=(input_height,input_width,3))
 
-    pool1 = MaxPooling2D((2, 2), strides=(2, 2), name='block1_pool', data_format='channels_first' )(conv1)
-    f1 = pool1
+
+    conv1 = Conv2D(64, (3, 3), activation='relu', padding='same', name='block1_conv1')(img_input)
+    conv1 = Conv2D(64, (3, 3), activation='relu', padding='same', name='block1_conv2')(conv1)
+
+    pool1 = MaxPooling2D((2, 2), strides=(2, 2), name='block1_pool')(conv1)
+
     # Block 2
-    conv2 = Conv2D(128, (3, 3), activation='relu', padding='same', name='block2_conv1', data_format='channels_first' )(pool1)
-    conv2 = Conv2D(128, (3, 3), activation='relu', padding='same', name='block2_conv2', data_format='channels_first' )(conv2)
-    pool2 = MaxPooling2D((2, 2), strides=(2, 2), name='block2_pool', data_format='channels_first' )(conv2)
-    f2 = pool2
-    # Block 3
-    conv3 = Conv2D(256, (3, 3), activation='relu', padding='same', name='block3_conv1', data_format='channels_first' )(pool2)
-    conv3 = Conv2D(256, (3, 3), activation='relu', padding='same', name='block3_conv2', data_format='channels_first' )(conv3)
-    conv3 = Conv2D(256, (3, 3), activation='relu', padding='same', name='block3_conv3', data_format='channels_first' )(conv3)
+    conv2 = Conv2D(128, (3, 3), activation='relu', padding='same', name='block2_conv1')(pool1)
+    conv2 = Conv2D(128, (3, 3), activation='relu', padding='same', name='block2_conv2')(conv2)
+    pool2 = MaxPooling2D((2, 2), strides=(2, 2), name='block2_pool')(conv2)
 
-    pool3 = MaxPooling2D((2, 2), strides=(2, 2), name='block3_pool', data_format='channels_first' )(conv3)
-    f3 = pool3
+    # Block 3
+    conv3 = Conv2D(256, (3, 3), activation='relu', padding='same', name='block3_conv1')(pool2)
+    conv3 = Conv2D(256, (3, 3), activation='relu', padding='same', name='block3_conv2')(conv3)
+    conv3 = Conv2D(256, (3, 3), activation='relu', padding='same', name='block3_conv3')(conv3)
+
+    pool3 = MaxPooling2D((2, 2), strides=(2, 2), name='block3_pool')(conv3)
+
     # Block 4
-    conv4 = Conv2D(512, (3, 3), activation='relu', padding='same', name='block4_conv1', data_format='channels_first' )(pool3)
-    conv4 = Conv2D(512, (3, 3), activation='relu', padding='same', name='block4_conv2', data_format='channels_first' )(conv4)
-    conv4 = Conv2D(512, (3, 3), activation='relu', padding='same', name='block4_conv3', data_format='channels_first' )(conv4)
-    drop4 = Dropout(0.5)(conv4)
-    pool4 = MaxPooling2D((2, 2), strides=(2, 2), name='block4_pool', data_format='channels_first' )(drop4)
-    f4 = pool4
+    conv4 = Conv2D(512, (3, 3), activation='relu', padding='same', name='block4_conv1')(pool3)
+    conv4 = Conv2D(512, (3, 3), activation='relu', padding='same', name='block4_conv2')(conv4)
+    conv4 = Conv2D(512, (3, 3), activation='relu', padding='same', name='block4_conv3')(conv4)
+    #drop4 = Dropout(0.5)(conv4)
+    pool4 = MaxPooling2D((2, 2), strides=(2, 2), name='block4_pool')(conv4)
+
     # Block 5
-    conv5 = Conv2D(512, (3, 3), activation='relu', padding='same', name='block5_conv1', data_format='channels_first' )(pool4)
-    conv5 = Conv2D(512, (3, 3), activation='relu', padding='same', name='block5_conv2', data_format='channels_first' )(conv5)
-    conv5 = Conv2D(512, (3, 3), activation='relu', padding='same', name='block5_conv3', data_format='channels_first' )(conv5)
-    drop5=Dropout(0.5)(conv5)
-    pool5 = MaxPooling2D((2, 2), strides=(2, 2), name='block5_pool', data_format='channels_first' )(drop5)
-    f5 = pool5
-    
-    x = Flatten(name='flatten')(pool5)
-    x = Dense(4096, activation='relu', name='fc1')(x)
-    x = Dense(4096, activation='relu', name='fc2')(x)
-    x = Dense( 1000 , activation='softmax', name='predictions')(x)
-    vgg = Model(img_input, x)
+    conv5 = Conv2D(512, (3, 3), activation='relu', padding='same', name='block5_conv1')(pool4)
+    conv5 = Conv2D(512, (3, 3), activation='relu', padding='same', name='block5_conv2')(conv5)
+    conv5 = Conv2D(512, (3, 3), activation='relu', padding='same', name='block5_conv3')(conv5)
+    #drop5=Dropout(0.5)(conv5)
+    pool5 = MaxPooling2D((2, 2), strides=(2, 2), name='block5_pool')(conv5)
+
+
+    vgg = Model(img_input, pool5)
     
     if (os.path.isfile(VGG_Weights_path)==True and os.path.isfile(weights_file_name)==False):    
         vgg.load_weights(VGG_Weights_path)
-    
-    levels = [f1 , f2 , f3 , f4 , f5 ]
-    
-    o = levels[4]
-    	
-    #o = ( ZeroPadding2D( (1,1) , data_format='channels_first' ))(o)
-    conv6 = ( Conv2D(512, (3, 3), padding='same', data_format='channels_first'))(o)
-    bn6 = ( BatchNormalization())(conv6)
+
+
+    conv6 =  Conv2D(512, (3, 3), padding='same', name='block6_conv1')(pool5)
+    bn6 =  BatchNormalization()(conv6)
     drop6 = Dropout(0.5)(bn6)
 
-    up7 = ( UpSampling2D( (2,2), data_format='channels_first'))(drop6)
-    merge7 = Concatenate([drop5, up7], axis=3)
+    up7 = UpSampling2D( (2,2), name='block7_up1')(drop6)
+    merge7 = concatenate([conv5, up7],name='block7_merge')
     #o = ( ZeroPadding2D( (1,1), data_format='channels_first'))(o)
-    conv7 = ( Conv2D( 256, (3, 3), padding='same', data_format='channels_first'))(merge7)
-    bn7 = ( BatchNormalization())(conv7)
+    conv7 = Conv2D( 256, (3, 3), padding='same', name='block7_conv1')(merge7)
+    bn7 = BatchNormalization()(conv7)
     drop7 = Dropout(0.5)(bn7)
 
-    up8 = ( UpSampling2D((2,2) , data_format='channels_first' ) )(drop7)
-    merge8 = Concatenate([drop4, up8], axis=3)
+    up8 =  UpSampling2D((2,2) , name='block8_up1') (drop7)
+    merge8 = concatenate([conv4, up8],name='block8_merge')
     #o = ( ZeroPadding2D((1,1) , data_format='channels_first' ))(o)
-    conv8 = ( Conv2D( 128 , (3, 3), padding='same' , data_format='channels_first' ))(merge8)
-    bn8 = ( BatchNormalization())(conv8)
+    conv8 = Conv2D( 128 , (3, 3), padding='same' ,name='block8_conv' )(merge8)
+    bn8 =  BatchNormalization()(conv8)
     drop8 = Dropout(0.5)(bn8)
 
-    up9 = ( UpSampling2D((2,2) , data_format='channels_first' ))(drop8)
+    up9 =  UpSampling2D((2,2) , name='block9_up1')(drop8)
     #o = ( ZeroPadding2D((1,1)  , data_format='channels_first' ))(o)
-    merge9 = Concatenate([conv3, up9], axis=3)
-    conv9 = ( Conv2D( 64 , (3, 3), padding='same'  , data_format='channels_first' ))(merge9)
-    bn9 = ( BatchNormalization())(conv9)
+    merge9 = concatenate([conv3, up9],name='block9_merge')
+    conv9 =  Conv2D( 64 , (3, 3), padding='same', name='block9_conv')(merge9)
+    bn9 = BatchNormalization()(conv9)
     drop9 = Dropout(0.5)(bn9)
 
-    up10 = ( UpSampling2D((2,2) , data_format='channels_first' ))(drop9)
+    up10 = UpSampling2D((2,2),name='block10_up1')(drop9)
     #o = ( ZeroPadding2D((1,1)  , data_format='channels_first' ))(o)
-    merge10 = Concatenate([conv2, up10], axis=3)
-    conv10 = ( Conv2D( 64 , (3, 3), padding='same'  , data_format='channels_first' ))(merge10)
-    bn10 = ( BatchNormalization())(conv10)
+    merge10 = concatenate([conv2, up10],name='block10_merge')
+    conv10 =  Conv2D( 64 , (3, 3), padding='same',name='block10_conv')(merge10)
+    bn10 =  BatchNormalization()(conv10)
     drop10 = Dropout(0.5)(bn10)
 
-    up11 = ( UpSampling2D((2,2) , data_format='channels_first' ))(drop10)
-    merge11 = Concatenate([conv2, up11], axis=3)
+    up11 = UpSampling2D((2,2) ,name='block11_up1')(drop10)
+    merge11 = concatenate([conv1, up11],name='block11_merge')
     #o = ( ZeroPadding2D((1,1)  , data_format='channels_first' ))(o)
-    conv11 = ( Conv2D( 64 , (3, 3), padding='same'  , data_format='channels_first' ))(merge11)
-    bn11 = ( BatchNormalization())(conv11)
+    conv11 = Conv2D( 64 , (3, 3), padding='same',name='block11_conv')(merge11)
+    bn11 =  BatchNormalization()(conv11)
     drop11 = Dropout(0.5)(bn11)
 
-    output =  Conv2D( n_classes , (3, 3) , padding='same', data_format='channels_first' )(drop11)
+    output =  Conv2D( n_classes , (3, 3) , padding='same',name='block12_conv')(drop11)
     
  
    
@@ -196,12 +188,13 @@ def label_to_color(im):
 
 def prepar_data(batch_file):
     #PATH="C:/Users/owner/Desktop/segmentaion/data/"
-
+    file_path='D:\\segmentaion'
     #C=color_to_catagory()
-    if (os.path.isfile('labeled_images_{}.npy'.format(batch_file))):
-        y=np.load('labeled_images_{}.npy'.format(batch_file))
+    file_name=os.path.join(file_path,'labeled_images_{}.npy'.format(batch_file))
+    if (os.path.isfile(file_name)):
+        y=np.load(file_name)
     else:
-        PATH = os.path.join(file_path,'Data\\Labeled\\','*.png')
+        PATH = os.path.join(file_path,'data\\Labeled\\','*.png')
         y=[]
         count=0
         i=0
@@ -221,18 +214,17 @@ def prepar_data(batch_file):
             y.append(np.array(labeled,dtype=np.uint8))
             #count+=1
             #if(count==200):
-        np.save('labeled_images_{}.npy'.format(i),y)
+        np.save(os.path.join(file_path,'labeled_images_{}.npy'.format(i)),y)
                 #i+=1
                 #count=0
                 #y=[]
-            
 
-    if (os.path.isfile('input_images_{}.npy'.format(batch_file))):
-        x=np.load('input_images_{}.npy'.format(batch_file))
+    file_name = os.path.join(file_path, 'input_images_{}.npy'.format(batch_file))
+    if (os.path.isfile(file_name)):
+        x=np.load(file_name)
     else:
         x=[]   
-        PATH="C:/Users/owner/Desktop/segmentaion/data/"
-        PATH = os.path.join(PATH,"Raw/","*.png")
+        PATH=os.path.join(file_path,'data\\Raw\\','*.png')
         count=0
         i=0
         for image in glob.glob(PATH):
@@ -241,10 +233,12 @@ def prepar_data(batch_file):
             
             im=cv2.cvtColor(im,cv2.COLOR_BGR2RGB)
             
-            x.append(np.transpose(im, (2, 0, 1)))
+            #x.append(np.transpose(im, (2, 0, 1)))
+            x.append(im)
             #count+=1
             #if(count==200):
-        np.save('input_images_{}.npy'.format(i),x)
+        x=np.array(x)
+        np.save(os.path.join(file_path,'input_images_{}.npy'.format(i)),x)
                 #i+=1
                 #count=0
                 #x=[]
@@ -252,28 +246,9 @@ def prepar_data(batch_file):
     return x,y
                
     
-def train_model(x=[],y=[]):   
+def train_model(x_train=[],y_train=[],x_valid=[],y_valid=[]):
 
-        val_ratio=0.8
-        
-        perm=np.random.permutation(x.shape[0])
-        x=x[perm,:,:,:]
-        y=y[perm,:,:]
-        
-        x_train=x[:int(len(x)*val_ratio),:,:,:]
-        y_train=y[:int(len(y)*val_ratio),:,:]
-        
-        x_valid=x[int(len(x)*val_ratio):,:,:,:]
-        y_valid=y[int(len(y)*val_ratio):,:,:]
-        del x
-        del y
-        x_train=np.array(x_train,dtype=np.float32)
-        y_train=np.array(y_train,dtype=np.float32)
-        
-        x_valid=np.array(x_valid,dtype=np.float32)
-        y_valid=np.array(y_valid,dtype=np.float32)
 
-        
         model=VGGSegnet( n_classes=32 ,  input_height=WIDTH, input_width=HIGHT )
         model.summary()
         if os.path.isfile(weights_file_name):
@@ -295,7 +270,7 @@ def train_model(x=[],y=[]):
         
      
                 
-        model_gpu.fit(x_train,y_train,epochs=50,shuffle=False,batch_size=3,validation_data=(x_valid,y_valid),callbacks=[])      
+        model_gpu.fit(x_train,y_train,epochs=500,shuffle=False,batch_size=3,validation_data=(x_valid,y_valid),callbacks=[tbCallBack])
             
 
 
@@ -331,12 +306,52 @@ def one_hot_it(labels):
     return x
 
 if __name__=='__main__':
-    x_train,y_train=prepar_data(0)
-    '''
+    file_path = 'D:\\segmentaion\\'
+    VGG_Weights_path = file_path + "vgg16_weights.h5"
+    weights_file_name = "weights_VGGsegnet.h5"
+    WIDTH = 480
+    HIGHT = 672
+
+    # vgg=VGG16(weights='imagenet',include_top=False)
+    # vgg.summary()
+    # vgg.save_weights('vgg16_weights.h5')
+    tbCallBack = keras.callbacks.TensorBoard(log_dir='/Graph', histogram_freq=1,
+                                             write_graph=True, write_images=True)
+    x,y=prepar_data(0)
+
+    val_ratio = 0.7
+    test_ratio = 0.1
+
+    x_test = x[len(x)-int(len(x)*test_ratio):, :, :, :]
+    y_test = y[len(y)-int(len(y)*test_ratio):, :, :]
+
+    x=x[:len(x)-int(len(x)*test_ratio), :, :, :]
+    y=y[:len(y)-int(len(y)*test_ratio), :, :]
+
+    perm = np.random.permutation(x.shape[0])
+    x = x[perm, :, :, :]
+    y = y[perm, :, :]
+
+    x_train = x[:int(len(x) * val_ratio), :, :, :]
+    y_train = y[:int(len(y) * val_ratio), :, :]
+
+    x_valid = x[int(len(x) * val_ratio):, :, :, :]
+    y_valid = y[int(len(y) * val_ratio):, :, :]
+
+
+
+    del x
+    del y
+    x_train = np.array(x_train, dtype=np.float32)
+    y_train = np.array(y_train, dtype=np.float32)
+
+    x_valid = np.array(x_valid, dtype=np.float32)
+    y_valid = np.array(y_valid, dtype=np.float32)
+
     for _ in range(5):
     
-            train_model(x_train,y_train)
-    '''
+            train_model(x_train,y_train,x_valid,y_valid)
+
     
     x_predict=test_model(x_train)
     
