@@ -114,8 +114,8 @@ def VGGSegnet( n_classes ,  input_height=416, input_width=608 ):
  
    
     o_shape = Model(img_input , output ).output_shape
-    outputHeight = o_shape[2]
-    outputWidth = o_shape[3]
+    outputHeight = o_shape[1]
+    outputWidth = o_shape[2]
     #o=(Flatten())(o)
     o = (Reshape((  -1  , outputHeight*outputWidth   )))(output)
     o = (Permute((2, 1)))(o)
@@ -270,7 +270,7 @@ def train_model(x_train=[],y_train=[],x_valid=[],y_valid=[]):
         
      
                 
-        model_gpu.fit(x_train,y_train,epochs=500,shuffle=False,batch_size=3,validation_data=(x_valid,y_valid),callbacks=[tbCallBack])
+        model_gpu.fit(x_train,y_train,epochs=500,shuffle=False,batch_size=32,validation_data=(x_valid,y_valid),callbacks=[tbCallBack])
             
 
 
@@ -353,7 +353,7 @@ if __name__=='__main__':
             train_model(x_train,y_train,x_valid,y_valid)
 
     
-    x_predict=test_model(x_train)
+    x_predict=test_model(x_test)
     
     
     plt.figure()
