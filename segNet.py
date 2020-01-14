@@ -259,7 +259,7 @@ def train_model(x_train=[],y_train=[],x_valid=[],y_valid=[]):
         
         model_gpu=model
         #model_gpu=multi_gpu_model(model,gpus=2)
-        #model_yaw=multi_gpu_model(model_yaw,gpus=2)
+
         
         optimizer=Adam(lr=0.001)
 
@@ -270,7 +270,7 @@ def train_model(x_train=[],y_train=[],x_valid=[],y_valid=[]):
         
      
                 
-        model_gpu.fit(x_train,y_train,epochs=500,shuffle=False,batch_size=32,validation_data=(x_valid,y_valid),callbacks=[tbCallBack])
+        model_gpu.fit(x_train,y_train,epochs=100,shuffle=False,batch_size=32,validation_data=(x_valid,y_valid),callbacks=[])
             
 
 
@@ -309,14 +309,14 @@ if __name__=='__main__':
     file_path = 'D:\\segmentaion\\'
     VGG_Weights_path = file_path + "vgg16_weights.h5"
     weights_file_name = "weights_VGGsegnet.h5"
-    WIDTH = 480
-    HIGHT = 672
+    WIDTH = 224#480
+    HIGHT = 224#672
 
     # vgg=VGG16(weights='imagenet',include_top=False)
     # vgg.summary()
     # vgg.save_weights('vgg16_weights.h5')
-    tbCallBack = keras.callbacks.TensorBoard(log_dir='/Graph', histogram_freq=1,
-                                             write_graph=True, write_images=True)
+    # tbCallBack = keras.callbacks.TensorBoard(log_dir='/Graph', histogram_freq=100,
+    #                                          write_graph=True, write_images=True)
     x,y=prepar_data(0)
 
     val_ratio = 0.7
