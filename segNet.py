@@ -231,7 +231,7 @@ def prepar_data(batch_file):
             im=cv2.imread(image)
             im=cv2.resize(im,(HIGHT,WIDTH))
             
-            im=cv2.cvtColor(im,cv2.COLOR_BGR2RGB)
+            im=cv2.cvtColor(im,cv2.COLOR_BGR2RGB) #/ 255
             
             #x.append(np.transpose(im, (2, 0, 1)))
             x.append(im)
@@ -246,8 +246,26 @@ def prepar_data(batch_file):
     return x,y
                
     
-def train_model(x_train=[],y_train=[],x_valid=[],y_valid=[]):
+def train_model(x=[],y=[]):
 
+        perm = np.random.permutation(x.shape[0])
+        x = x[perm, :, :, :]
+        y = y[perm, :, :, :]
+
+        x_train = x[:int(len(x) * val_ratio), :, :, :]
+        y_train = y[:int(len(y) * val_ratio), :, :, :]
+
+        x_valid = x[int(len(x) * val_ratio):, :, :, :]
+        y_valid = y[int(len(y) * val_ratio):, :, :, :]
+
+        del x
+        del y
+
+        x_train = np.array(x_train, dtype=np.float32)
+        y_train = np.array(y_train, dtype=np.float32)
+
+        x_valid = np.array(x_valid, dtype=np.float32)
+        y_valid = np.array(y_valid, dtype=np.float32)
 
         model=VGGSegnet( n_classes=32 ,  input_height=WIDTH, input_width=HIGHT )
         model.summary()
@@ -258,10 +276,11 @@ def train_model(x_train=[],y_train=[],x_valid=[],y_valid=[]):
         
         
         model_gpu=model
+
         #model_gpu=multi_gpu_model(model,gpus=2)
 
         
-        optimizer=Adam(lr=0.001)
+        optimizer=Adam(lr=0.0001)
 
 
         
@@ -270,7 +289,7 @@ def train_model(x_train=[],y_train=[],x_valid=[],y_valid=[]):
         
      
                 
-        model_gpu.fit(x_train,y_train,epochs=100,shuffle=True,batch_size=32,validation_data=(x_valid,y_valid),callbacks=[])
+        model_gpu.fit(x_train,y_train,epochs=500,shuffle=True,batch_size=4,validation_data=(x_valid,y_valid),callbacks=[])
             
 
 
@@ -285,7 +304,7 @@ def test_model(x_test):
     if os.path.isfile(weights_file_name):
         model.load_weights(weights_file_name)
     
-    x_test1=np.expand_dims(x_test[50], axis=0)
+    x_test1=np.expand_dims(x_test[30], axis=0)
     x_predict=model.predict(x_test1,batch_size=1)[0,:,:,:]
 
     #x_predict=np.reshape(x_predict[0],(WIDTH,HIGHT,32))
@@ -309,8 +328,8 @@ if __name__=='__main__':
     file_path = 'D:\\segmentaion\\'
     VGG_Weights_path = file_path + "vgg16_weights.h5"
     weights_file_name = "weights_VGGsegnet.h5"
-    WIDTH = 224#480
-    HIGHT = 224#672
+    WIDTH = 480
+    HIGHT = 672
 
     # vgg=VGG16(weights='imagenet',include_top=False)
     # vgg.summary()
@@ -331,33 +350,25 @@ if __name__=='__main__':
     x=x[:len(x)-int(len(x)*test_ratio), :, :, :]
     y=y[:len(y)-int(len(y)*test_ratio), :, : ,:]
 
-    perm = np.random.permutation(x.shape[0])
-    x = x[perm, :, :, :]
-    y = y[perm, :, :, :]
 
-    x_train = x[:int(len(x) * val_ratio), :, :, :]
-    y_train = y[:int(len(y) * val_ratio), :, :, :]
 
-    x_valid = x[int(len(x) * val_ratio):, :, :, :]
-    y_valid = y[int(len(y) * val_ratio):, :, :, :]
-
-    del x
-    del y
-
-    x_train = np.array(x_train, dtype=np.float32)
-    y_train = np.array(y_train, dtype=np.float32)
-
-    x_valid = np.array(x_valid, dtype=np.float32)
-    y_valid = np.array(y_valid, dtype=np.float32)
-
-    #train_model(x_train,y_train,x_valid,y_valid)
+    train_model(x,y)
 
     
     x_predict=test_model(x_test)
-    
-    
-    plt.figure()
+    #print(x_predict)
+
+    y = y_test[30, :, :]
+    y = np.argmax(y, axis=2)
+    y = label_to_color(y)
+
+
     plt.imshow(x_predict)
+    plt.show()
+    plt.imshow(y)
+    plt.show()
+
+
     #plt.figure()
     # y=y_test[50,:,:]
     # #y=np.reshape(y,(WIDTH,HIGHT,32))
