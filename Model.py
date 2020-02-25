@@ -26,6 +26,7 @@ class Dataset(data.Dataset):
     def __len__(self):
         return self.x.size(0)
 
+
 class ConvBlock(nn.Module):
     """
     Helper module that consists of a Conv -> BN -> ReLU

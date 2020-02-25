@@ -212,6 +212,7 @@ def label_to_color(im):
     return out
 
 
+
 def prepar_data(batch_file,file_path):
     # PATH="C:/Users/owner/Desktop/segmentaion/data/"
     # C=color_to_catagory()
