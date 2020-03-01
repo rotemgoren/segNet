@@ -23,12 +23,13 @@ else:
     from keras.layers import Input,Dense, Conv2D, MaxPooling2D,Flatten,ZeroPadding2D, Reshape, Permute, Activation,UpSampling2D,Dropout,concatenate
     from keras.layers.normalization import BatchNormalization
     from keras import backend as K
-    from keras.applications.vgg16 import VGG16
+    from keras.applications.vgg19 import VGG19
 
-from keras.utils.np_utils import to_categorical
+    from keras.utils.np_utils import to_categorical
 from collections import OrderedDict
 import tqdm
 import os
+
 
 
 def VGGSegnet(n_classes, input_height=416, input_width=608):
@@ -275,9 +276,10 @@ def prepar_data(batch_file,file_path):
 
 def train_model(x=[],y=[],PYTORCH=False):
 
-        BATCH_SIZE=16
+        BATCH_SIZE=8
         EPOCHS=500
         ngpu=1
+        val_ratio=0.7
 
         perm = np.random.permutation(x.shape[0])
         x = x[perm, :, :, :]
@@ -306,10 +308,10 @@ def train_model(x=[],y=[],PYTORCH=False):
             train_dataloader = torch.utils.data.DataLoader(train_data, batch_size=BATCH_SIZE,
                                                            shuffle=True, num_workers=4,
                                                            pin_memory=True)  # divided into batches
-            valid_dataloader = torch.utils.data.DataLoader(valid_data, batch_size=BATCH_SIZE,
+            valid_dataloader = torch.utils.data.DataLoader(valid_data, batch_size=int(BATCH_SIZE/2),
                                                            shuffle=True, num_workers=4,
                                                            pin_memory=True)  # divided into batches
-            model=UNetWithResNet50()
+            model=UNetWithResNet50(n_classes=len(camvid_colors))
             if (os.path.isfile(model_file)):
                 state_dict = torch.load(model_file, map_location=device)
                 new_state_dict = OrderedDict()
@@ -327,41 +329,73 @@ def train_model(x=[],y=[],PYTORCH=False):
 
             optimizer = torch.optim.Adam(model.parameters(), lr=0.001, betas=(0.5, 0.999))
 
-            train_loss=0
-            valid_loss=0
-            model.train()
             for epoch in range(EPOCHS):
-                for (x, y) in tqdm(train_dataloader):
-                    model.zero_grad()
+                train_loss=0
+                valid_loss=0
+                total_train=0
+                correct_train = 0
+                total_valid=0
+                correct_valid=0
+                model.train()
+
+                for i,(x, y) in (enumerate(train_dataloader)):
+
                     x = x.to(device, non_blocking=True)
                     y = y.to(device, non_blocking=True)
 
+                    x = x.transpose(3, 1).transpose(3, 2)
+                    y = y.transpose(3, 1).transpose(3, 2)
                     o=model(x)
-                    loss=nn.CrossEntropyLoss()(o,y)
 
-                    train_loss += loss
 
+                    loss=nn.BCEWithLogitsLoss()(o,y)
+                    optimizer.zero_grad()
                     loss.backward()
                     optimizer.step()
+
+                    train_loss += loss.item()
+
+                    # accuracy
+
+                    _, predicted = torch.max(o.data, 1)
+                    _, true = torch.max(y.data, 1)
+                    total_train += true.size(0)*true.size(1)*true.size(2)
+                    correct_train += predicted.eq(true.data).sum().item()
+
+                train_accuracy = correct_train / total_train
                 train_loss=train_loss/len(train_dataloader)
-                for (x, y) in tqdm(valid_dataloader):
-                    model.zero_grad()
+
+                torch.cuda.empty_cache()
+                model.eval()
+                for i,(x, y) in (enumerate(valid_dataloader)):
+
                     x = x.to(device, non_blocking=True)
                     y = y.to(device, non_blocking=True)
 
+                    x = x.transpose(3, 1).transpose(3, 2)
+                    y = y.transpose(3, 1).transpose(3, 2)
                     o = model(x)
-                    loss = nn.CrossEntropyLoss()(o, y)
 
-                    valid_loss += loss
+                    loss=nn.BCEWithLogitsLoss()(o,y)
+
+                    valid_loss += loss.item()
+
+                    _, predicted = torch.max(o.data, 1)
+                    _, true = torch.max(y.data, 1)
+                    total_valid += true.size(0)*true.size(1)*true.size(2)
+                    correct_valid += predicted.eq(true.data).sum().item()
+
                 valid_loss = valid_loss / len(train_dataloader)
-            print('[{}/{}]\tTrain loss: {}\tValid loss:{}'.format(epoch, EPOCHS,train_loss.item(), valid_loss.item()))
-            torch.save(model.state_dict(), '%s' % model_file)
+                valid_accuracy = correct_valid / total_valid
+                torch.cuda.empty_cache()
+                print('[{}/{}]\tTrain loss: {}\t Train Acc: {}\tValid loss:{}\t Valid Acc:{}'.format(epoch, EPOCHS,train_loss,train_accuracy, valid_loss,valid_accuracy))
+                torch.save(model.state_dict(), '%s' % model_file)
 
 
 
 
         else:
-            model = VGGSegnet(n_classes=32, input_height=HEIGHT, input_width=WIDTH)
+            model = VGGSegnet(n_classes=len(camvid_colors), input_height=HEIGHT, input_width=WIDTH)
             model.summary()
             if os.path.isfile(weights_file_name):
 
@@ -379,25 +413,94 @@ def train_model(x=[],y=[],PYTORCH=False):
             K.clear_session()
 
 
-def test_model(x_test):
-    model = VGGSegnet(n_classes=32, input_height=HEIGHT, input_width=WIDTH)
-    model.summary()
+def test_model(PYTORCH=PYTORCH):
+    ngpu=1
+    if(PYTORCH):
+        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        model = UNetWithResNet50(n_classes=len(camvid_colors))
+        if (os.path.isfile(model_file)):
+            state_dict = torch.load(model_file, map_location=device)
+            new_state_dict = OrderedDict()
+            for k, v in state_dict.items():
+                if (k[7:] == 'module.'):
+                    name = k[7:]  # remove `module.`
+                    new_state_dict[name] = v
+                else:
+                    new_state_dict[k] = v
+            # load params
+            model.load_state_dict(new_state_dict)
+        model = model.to(device)
+        if (device.type == 'cuda') and (ngpu > 1):
+            model = nn.DataParallel(model, list(range(ngpu)), dim=1)
 
-    if os.path.isfile(weights_file_name):
-        model.load_weights(weights_file_name)
 
-    x_test1 = np.expand_dims(x_test[30], axis=0)
-    x_predict = model.predict(x_test1, batch_size=1)[0, :, :, :]
+        PATH = os.path.join(file_path, 'data\\Raw\\', '*.png')
+        count = 0
+        i = 0
+        x_predict = []
+        for image in glob.glob(PATH)[-10:]:
+            im = cv2.imread(image)
+            im = cv2.resize(im, (WIDTH, HEIGHT))
 
-    # x_predict=np.reshape(x_predict[0],(WIDTH,HIGHT,32))
+            im = cv2.cvtColor(im, cv2.COLOR_BGR2RGB) / 255
 
-    x_predict = np.argmax(x_predict, axis=2)
-    x_predict = label_to_color(x_predict)
+            im1=torch.FloatTensor(im).to(device).unsqueeze(0)
+            im1 = im1.transpose(3, 1).transpose(3, 2)
+            y_est = model(im1)
+            y_est = y_est.transpose(3, 1).transpose(1, 2)
+            y_est=y_est.cpu().detach().numpy()
 
-    del model
-    K.clear_session()
+            y = y_est[0, :, :, :]
+            y = np.argmax(y, axis=2)
+            y = label_to_color(y)
+            x_predict.append(y)
 
-    return x_predict
+    else:
+        model = VGGSegnet(n_classes=32, input_height=HEIGHT, input_width=WIDTH)
+        model.summary()
+
+        if os.path.isfile(weights_file_name):
+            model.load_weights(weights_file_name)
+
+        #x_test1 = np.expand_dims(x_test[20:30], axis=0)
+
+
+        x = []
+        PATH = os.path.join(file_path, 'data\\Raw\\', '*.png')
+        count = 0
+        i = 0
+        x_predict = []
+        for image in glob.glob(PATH)[-10:]:
+            im = cv2.imread(image)
+            im = cv2.resize(im, (WIDTH, HEIGHT))
+
+            im = cv2.cvtColor(im, cv2.COLOR_BGR2RGB) / 255
+
+
+            y_est = model.predict(im.unsqueeze(0))
+
+
+            y = y_est[i, :, :, :]
+            y = np.argmax(y, axis=2)
+            y = label_to_color(y)
+            x_predict.append(y)
+
+        del model
+        K.clear_session()
+
+    PATH = os.path.join(file_path, 'data\\Labeled\\', '*.png')
+    count = 0
+    i = 0
+    y_test = []
+    for image in glob.glob(PATH)[-10:]:
+        im = cv2.imread(image)
+        im = cv2.resize(im, (WIDTH, HEIGHT))
+
+        im = cv2.cvtColor(im, cv2.COLOR_BGR2RGB)
+
+        y_test.append(im)
+
+    return x_predict,y_test
 
 
 def one_hot_it(labels):
@@ -409,48 +512,35 @@ def one_hot_it(labels):
 
 if __name__=='__main__':
     file_path = 'D:\\segmentaion\\'
-    VGG_Weights_path = file_path + "vgg16_weights.h5"
+    VGG_Weights_path = file_path + "vgg19_weights.h5"
     weights_file_name = "weights_VGGsegnet.h5"
     model_file="Unet_resnet50.pth"
     HEIGHT = 224#480
     WIDTH  = 384#672
 
-    # vgg=VGG16(weights='imagenet',include_top=False)
-    # vgg.summary()
-    # vgg.save_weights('vgg16_weights.h5')
+
+    #vgg=VGG19(weights='imagenet',include_top=False)
+    #vgg.summary()
+    #vgg.save_weights('vgg19_weights.h5')
     # tbCallBack = keras.callbacks.TensorBoard(log_dir='/Graph', histogram_freq=100,
     #                                          write_graph=True, write_images=True)
 
     #for _ in range(5):
-    x,y=prepar_data(0,file_path)
+#     x,y=prepar_data(0,file_path)
 
-    val_ratio = 0.7
-    test_ratio = 0.1
-
-    x_test = x[len(x)-int(len(x)*test_ratio):, :, :, :]
-    y_test = y[len(y)-int(len(y)*test_ratio):, :, :, :]
-
-# for _ in range(5):
-    x=x[:len(x)-int(len(x)*test_ratio), :, :, :]
-    y=y[:len(y)-int(len(y)*test_ratio), :, : ,:]
+#     train_model(x,y,PYTORCH=PYTORCH)
 
 
 
-    train_model(x,y,PYTORCH=PYTORCH)
-
-    
-    x_predict=test_model(x_test)
+    x_predict,y_test=test_model()
     #print(x_predict)
+    for i,x_est in enumerate(x_predict):
+        y = y_test[i]
 
-    # y = y_test[20:30, :, :]
-    # y = np.argmax(y, axis=2)
-    # y = label_to_color(y)
-
-
-    plt.imshow(x_predict)
-    plt.show()
-    # plt.imshow(y)
-    # plt.show()
+        plt.imshow(x_est)
+        plt.show()
+        plt.imshow(y)
+        plt.show()
 
 
     #plt.figure()
